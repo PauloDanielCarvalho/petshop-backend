@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  # 🗄️ PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: petshop-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-petshop_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-petshop_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - petshop-network
+
+  # 🚀 Petshop API (Opcional - para desenvolvimento full-stack)
+  petshop-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: petshop-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-petshop_db}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: >
+      sh -c "
+        echo '🔄 Aguardando banco de dados...' &&
+        until pg_isready -h postgres -p 5432 -U ${POSTGRES_USER:-postgres}; do
+          echo '⏳ Banco não está pronto ainda...'
+          sleep 2
+        done &&
+        echo '✅ Banco está pronto!' &&
+        echo '🔄 Executando migrations...' &&
+        npx prisma migrate deploy &&
+        echo '🌱 Executando seed...' &&
+        npm run seed &&
+        echo '🚀 Iniciando aplicação...' &&
+        npm run dev
+      "
+    networks:
+      - petshop-network
+    profiles:
+      - full-stack
+
+  
+  
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  petshop-network:
+    driver: bridge
