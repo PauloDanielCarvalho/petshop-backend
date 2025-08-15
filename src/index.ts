@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
+import cors from 'cors';
 
 import authRoutes from './routes/authRoutes';
 import petRoutes from './routes/petRoutes';
@@ -12,6 +13,10 @@ import { config } from './config';
 dotenv.config();
 const app = express();
 
+app.use(cors({
+  origin: 'http://localhost:4200',
+  credentials: true
+}));
 // Rate limiting geral para toda a aplicação
 app.use(generalLimiter);
 
